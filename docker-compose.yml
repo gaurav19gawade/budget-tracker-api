@@ -1,0 +1,22 @@
+# Local infrastructure only. Run the API and web natively (see README).
+# Postgres 17 to match current Supabase projects.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: budget-tracker-postgres
+    environment:
+      POSTGRES_DB: budget_tracker
+      POSTGRES_USER: budget
+      POSTGRES_PASSWORD: budget
+    ports:
+      - "5433:5432"   # 5433 on the host so it doesn't clash with a Postgres you may already run
+    volumes:
+      - budget_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budget -d budget_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  budget_pgdata:

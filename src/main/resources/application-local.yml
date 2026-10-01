@@ -1,0 +1,11 @@
+# Local profile: plain Postgres from docker-compose.yml, no authentication.
+# Start with: SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/budget_tracker
+    username: budget
+    password: budget
+
+logging:
+  level:
+    com.budgettracker: DEBUG

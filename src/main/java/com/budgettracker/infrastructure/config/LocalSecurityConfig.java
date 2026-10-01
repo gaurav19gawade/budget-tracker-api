@@ -10,23 +10,22 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Real security chain, active everywhere except the "local" profile.
- * Phase 0: only the health endpoint is public; everything else is locked down.
- * Phase 1 replaces this with Supabase JWT validation (OAuth2 resource server).
+ * LOCAL DEVELOPMENT ONLY: no authentication. Active only with the "local" profile,
+ * and {@link LocalProfileGuard} refuses to start if that profile points at a non-local database.
+ * Phase 1 will replace "permit all" with a fixed dev user and household so
+ * household scoping is still exercised locally.
  */
 @Configuration
-@Profile("!local")
-public class SecurityConfig {
+@Profile("local")
+public class LocalSecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain localSecurityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health/**").permitAll()
-                .anyRequest().authenticated());
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
 }

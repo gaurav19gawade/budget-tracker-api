@@ -9,3 +9,4 @@ target/
 *.p12
 *.key
 .DS_Store
+.env.example
