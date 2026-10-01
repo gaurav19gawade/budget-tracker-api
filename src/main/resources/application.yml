@@ -6,6 +6,14 @@ app:
   cors:
     # Comma-separated. Set APP_CORS_ALLOWED_ORIGINS to the Vercel URL in Railway.
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  # Supabase user id (UUID) of the one person allowed to create the first household.
+  bootstrap-owner-user-id: ${BOOTSTRAP_OWNER_USER_ID:}
+  supabase:
+    # https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+    jwks-uri: ${SUPABASE_JWKS_URI:}
+    # https://<project-ref>.supabase.co/auth/v1
+    issuer: ${SUPABASE_ISSUER:}
+    jws-algorithm: ${SUPABASE_JWS_ALGORITHM:ES256}
 
 spring:
   application:
