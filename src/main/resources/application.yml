@@ -17,9 +17,14 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate.default_schema: ${DB_SCHEMA:budget}
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: ${DB_SCHEMA:budget}
+    default-schema: ${DB_SCHEMA:budget}
+    create-schemas: true
 
 management:
   endpoints:

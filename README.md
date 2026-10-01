@@ -29,3 +29,4 @@ mvn verify   # Testcontainers starts Postgres; Docker must be running
 ## Deploy (Railway)
 
 Railway builds from the `Dockerfile`. Set the variables from `.env.example`. Health check path: `/actuator/health`.
+# budget-tracker-api
