@@ -15,17 +15,15 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/teller/enrollments")
-public class TellerEnrollmentController {
+@RequestMapping("/api/simplefin/connections")
+public class SimpleFinConnectionController {
 
-    public record ConnectRequest(
-            @NotBlank String enrollmentId,
-            @NotBlank String accessToken) {
+    public record ConnectRequest(@NotBlank String setupToken) {
     }
 
     private final EnrollmentService enrollmentService;
 
-    public TellerEnrollmentController(EnrollmentService enrollmentService) {
+    public SimpleFinConnectionController(EnrollmentService enrollmentService) {
         this.enrollmentService = enrollmentService;
     }
 
@@ -33,8 +31,7 @@ public class TellerEnrollmentController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<AccountView> connect(HouseholdContext ctx,
                                      @Valid @RequestBody ConnectRequest request) {
-        List<BankAccount> accounts = enrollmentService.connect(
-                ctx, request.enrollmentId(), request.accessToken());
-        return accounts.stream().map(AccountController::toView).toList();
+        List<BankAccount> connected = enrollmentService.connect(ctx, request.setupToken());
+        return connected.stream().map(AccountController::toView).toList();
     }
 }

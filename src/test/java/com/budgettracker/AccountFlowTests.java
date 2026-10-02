@@ -1,7 +1,6 @@
 package com.budgettracker;
 
 import static org.hamcrest.Matchers.hasSize;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -14,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.budgettracker.application.port.BankDataProvider;
 import com.budgettracker.application.port.HouseholdRepository;
 import com.budgettracker.domain.Household;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,8 +30,8 @@ class AccountFlowTests extends IntegrationTestBase {
     static final UUID MEMBER = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     static final UUID OTHER_USER = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    static final String ENROLLMENT_ID = "enr_test_enrollment_001";
-    static final String ACCESS_TOKEN = "test_access_token";
+    static final String SETUP_TOKEN = "dGVzdC1zZXR1cC10b2tlbg=="; // base64("test-setup-token")
+    static final String ACCESS_URL = "https://user:pass@beta-bridge.simplefin.org/simplefin";
     static final String ACCOUNT_ID_1 = "acc_test_001";
     static final String ACCOUNT_ID_2 = "acc_test_002";
 
@@ -56,14 +54,15 @@ class AccountFlowTests extends IntegrationTestBase {
         Household h2 = households.create(new Household(UUID.randomUUID(), "Other Household"));
         households.addMember(h2.id(), OTHER_USER, Instant.now());
 
-        // Default: two sandbox accounts under the enrollment.
-        when(bankData.fetchAccounts(ACCESS_TOKEN)).thenReturn(List.of(
-                new BankDataProvider.ProviderAccount(ACCOUNT_ID_1, ENROLLMENT_ID,
-                        "Chase", "My Checking", "depository", "checking", "1234", "USD", "open"),
-                new BankDataProvider.ProviderAccount(ACCOUNT_ID_2, ENROLLMENT_ID,
-                        "Chase", "My Savings", "depository", "savings", "5678", "USD", "open")));
-        when(bankData.fetchBalance(eq(ACCESS_TOKEN), any())).thenReturn(
-                new BankDataProvider.ProviderBalance(new BigDecimal("1000.00"), new BigDecimal("1100.00")));
+        // Default: claim returns ACCESS_URL, two accounts with balances.
+        when(bankData.claim(eq(SETUP_TOKEN))).thenReturn(ACCESS_URL);
+        when(bankData.fetchAccounts(eq(ACCESS_URL))).thenReturn(List.of(
+                new BankDataProvider.ProviderAccount(ACCOUNT_ID_1, ACCOUNT_ID_1,
+                        "Chase", "My Checking", "depository", "checking", "1234", "USD", "open",
+                        new BigDecimal("1000.00"), new BigDecimal("1100.00")),
+                new BankDataProvider.ProviderAccount(ACCOUNT_ID_2, ACCOUNT_ID_2,
+                        "Chase", "My Savings", "depository", "savings", "5678", "USD", "open",
+                        new BigDecimal("500.00"), new BigDecimal("500.00"))));
     }
 
     static RequestPostProcessor asUser(UUID id) {
@@ -74,7 +73,7 @@ class AccountFlowTests extends IntegrationTestBase {
 
     @Test
     void connectRequiresAuthentication() throws Exception {
-        mvc.perform(post("/api/teller/enrollments")
+        mvc.perform(post("/api/simplefin/connections")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(connectBody()))
                 .andExpect(status().isUnauthorized());
@@ -83,7 +82,7 @@ class AccountFlowTests extends IntegrationTestBase {
     @Test
     void connectRequiresAHousehold() throws Exception {
         UUID noHousehold = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
-        mvc.perform(post("/api/teller/enrollments").with(asUser(noHousehold))
+        mvc.perform(post("/api/simplefin/connections").with(asUser(noHousehold))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(connectBody()))
                 .andExpect(status().isForbidden())
@@ -99,7 +98,7 @@ class AccountFlowTests extends IntegrationTestBase {
 
     @Test
     void connectReturnsAccounts() throws Exception {
-        mvc.perform(post("/api/teller/enrollments").with(asUser(MEMBER))
+        mvc.perform(post("/api/simplefin/connections").with(asUser(MEMBER))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(connectBody()))
                 .andExpect(status().isCreated())
@@ -111,10 +110,10 @@ class AccountFlowTests extends IntegrationTestBase {
 
     @Test
     void connectIsIdempotent() throws Exception {
-        mvc.perform(post("/api/teller/enrollments").with(asUser(MEMBER))
+        mvc.perform(post("/api/simplefin/connections").with(asUser(MEMBER))
                         .contentType(MediaType.APPLICATION_JSON).content(connectBody()))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/teller/enrollments").with(asUser(MEMBER))
+        mvc.perform(post("/api/simplefin/connections").with(asUser(MEMBER))
                         .contentType(MediaType.APPLICATION_JSON).content(connectBody()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$", hasSize(2)));
@@ -178,7 +177,7 @@ class AccountFlowTests extends IntegrationTestBase {
     // ---- helpers ------------------------------------------------------------------
 
     private void connect(UUID userId) throws Exception {
-        mvc.perform(post("/api/teller/enrollments").with(asUser(userId))
+        mvc.perform(post("/api/simplefin/connections").with(asUser(userId))
                 .contentType(MediaType.APPLICATION_JSON).content(connectBody()))
                 .andExpect(status().isCreated());
     }
@@ -192,7 +191,7 @@ class AccountFlowTests extends IntegrationTestBase {
 
     private static String connectBody() {
         return """
-                {"enrollmentId":"%s","accessToken":"%s"}
-                """.formatted(ENROLLMENT_ID, ACCESS_TOKEN);
+                {"setupToken":"%s"}
+                """.formatted(SETUP_TOKEN);
     }
 }

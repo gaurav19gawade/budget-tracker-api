@@ -9,20 +9,19 @@ import com.budgettracker.domain.TellerEnrollment;
 import com.budgettracker.domain.error.ConflictException;
 import com.budgettracker.domain.error.NotFoundException;
 import com.budgettracker.infrastructure.security.TokenEncryptionService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class EnrollmentService {
-
-    private static final Logger log = LoggerFactory.getLogger(EnrollmentService.class);
 
     private final EnrollmentRepository enrollments;
     private final BankAccountRepository accounts;
@@ -43,52 +42,53 @@ public class EnrollmentService {
     }
 
     /**
-     * Stores a Teller enrollment and the accounts that belong to it.
-     * Idempotent: if the enrollment already belongs to this household, updates the
-     * encrypted token and returns the existing active accounts without re-fetching.
+     * Claims a SimpleFin setup token, fetches accounts, and persists them.
+     * Idempotent: if the same access credential (identified by its SHA-256 fingerprint)
+     * is already stored for this household, the encrypted credential is refreshed and
+     * the existing active accounts are returned without re-fetching.
      */
-    public List<BankAccount> connect(HouseholdContext ctx, String tellerId, String accessToken) {
-        Optional<TellerEnrollment> existing = enrollments.findByTellerId(tellerId);
+    public List<BankAccount> connect(HouseholdContext ctx, String setupToken) {
+        String accessCredential = bankData.claim(setupToken);
+        String connectionId = stableId(accessCredential);
+
+        Optional<TellerEnrollment> existing = enrollments.findByTellerId(connectionId);
         if (existing.isPresent()) {
             TellerEnrollment current = existing.get();
             if (!current.householdId().equals(ctx.householdId())) {
-                throw new ConflictException("This enrollment belongs to another household.");
+                throw new ConflictException("This connection belongs to another household.");
             }
-            // Idempotent re-connect: refresh encrypted token, return existing accounts.
             enrollments.save(new TellerEnrollment(current.id(), current.householdId(),
                     current.tellerId(), current.institution(),
-                    encryption.encrypt(accessToken), current.createdAt()));
+                    encryption.encrypt(accessCredential), current.createdAt()));
             return accounts.findActiveByHouseholdId(ctx.householdId()).stream()
                     .filter(a -> a.enrollmentId().equals(current.id()))
                     .toList();
         }
 
-        // New enrollment: fetch accounts from Teller, then persist everything.
-        List<BankDataProvider.ProviderAccount> providerAccounts = bankData.fetchAccounts(accessToken);
+        List<BankDataProvider.ProviderAccount> providerAccounts = bankData.fetchAccounts(accessCredential);
         String institution = providerAccounts.isEmpty() ? "Unknown"
                 : providerAccounts.get(0).institution();
 
         Instant now = clock.instant();
         TellerEnrollment enrollment = enrollments.save(new TellerEnrollment(
-                UUID.randomUUID(), ctx.householdId(), tellerId,
-                institution, encryption.encrypt(accessToken), now));
+                UUID.randomUUID(), ctx.householdId(), connectionId,
+                institution, encryption.encrypt(accessCredential), now));
 
         List<BankAccount> result = new ArrayList<>();
         for (BankDataProvider.ProviderAccount pa : providerAccounts) {
-            BankDataProvider.ProviderBalance balance = fetchBalanceSafely(accessToken, pa.id());
             result.add(accounts.save(new BankAccount(
                     UUID.randomUUID(), ctx.householdId(), enrollment.id(),
                     pa.id(), pa.institution(), pa.name(), pa.type(), pa.subtype(),
                     pa.lastFour(), pa.currency() != null ? pa.currency() : "USD",
-                    balance.available(), balance.ledger(), now,
+                    pa.balanceAvailable(), pa.balanceLedger(), now,
                     "active", now, null)));
         }
         return result;
     }
 
     /**
-     * Soft-deletes the account. Deletes the parent enrollment when its last
-     * active account is removed (revokes the Teller token at the enrollment level).
+     * Soft-deletes the account. Deletes the parent connection when its last
+     * active account is removed.
      */
     public void disconnect(HouseholdContext ctx, UUID accountId) {
         BankAccount account = accounts.findById(accountId)
@@ -113,12 +113,14 @@ public class EnrollmentService {
         }
     }
 
-    private BankDataProvider.ProviderBalance fetchBalanceSafely(String accessToken, String accountId) {
+    /** SHA-256 fingerprint of the access credential — used as the unique connection key. */
+    private static String stableId(String accessCredential) {
         try {
-            return bankData.fetchBalance(accessToken, accountId);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(accessCredential.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash).substring(0, 32);
         } catch (Exception e) {
-            log.warn("Could not fetch balance for account {}: {}", accountId, e.getMessage());
-            return new BankDataProvider.ProviderBalance(null, null);
+            return UUID.randomUUID().toString();
         }
     }
 }

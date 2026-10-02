@@ -9,11 +9,7 @@ app:
   # Supabase user id (UUID) of the one person allowed to create the first household.
   bootstrap-owner-user-id: ${BOOTSTRAP_OWNER_USER_ID:}
   teller:
-    # mTLS client certificate and key, base64-encoded PEM files (from Teller dashboard).
-    # Required for all environments including sandbox when making backend API calls.
-    cert-pem-base64: ${TELLER_CERT_PEM_BASE64:}
-    key-pem-base64: ${TELLER_KEY_PEM_BASE64:}
-    # AES-256 key for encrypting Teller access tokens at rest.
+    # AES-256 key for encrypting SimpleFin access URLs at rest.
     # Generate with: openssl rand -base64 32
     token-encryption-key: ${TELLER_TOKEN_ENCRYPTION_KEY}
   supabase:

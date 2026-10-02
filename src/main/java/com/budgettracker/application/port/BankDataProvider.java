@@ -4,33 +4,33 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Abstraction over the bank-data provider (Teller today, swappable later).
- * Callers pass the raw access token; they never deal with mTLS or HTTP details.
+ * Abstraction over the bank-data provider (SimpleFin Bridge today, swappable later).
+ * Callers pass the raw access credential; they never deal with HTTP details.
  */
 public interface BankDataProvider {
 
     record ProviderAccount(
             String id,
-            String enrollmentId,
+            String connectionId,
             String institution,
             String name,
             String type,
             String subtype,
             String lastFour,
             String currency,
-            String status) {
+            String status,
+            BigDecimal balanceAvailable,
+            BigDecimal balanceLedger) {
     }
-
-    record ProviderBalance(
-            BigDecimal available,
-            BigDecimal ledger) {
-    }
-
-    List<ProviderAccount> fetchAccounts(String accessToken);
 
     /**
-     * Returns a balance with null values if the account type does not support balance
-     * queries or if the Teller call fails non-fatally (e.g. credit cards with no available).
+     * Exchange a one-time setup token for a persistent access credential.
+     * For SimpleFin Bridge this decodes the base64 token and POSTs to the claim URL.
      */
-    ProviderBalance fetchBalance(String accessToken, String accountId);
+    String claim(String setupToken);
+
+    /**
+     * Fetch all accounts for the given access credential, including current balances.
+     */
+    List<ProviderAccount> fetchAccounts(String accessCredential);
 }
