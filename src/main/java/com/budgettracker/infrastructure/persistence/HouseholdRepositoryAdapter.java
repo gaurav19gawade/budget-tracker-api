@@ -87,4 +87,9 @@ class HouseholdRepositoryAdapter implements HouseholdRepository {
     public boolean anyHouseholdExists() {
         return households.count() > 0;
     }
+
+    @Override
+    public List<UUID> findAllIds() {
+        return households.findAllIds();
+    }
 }

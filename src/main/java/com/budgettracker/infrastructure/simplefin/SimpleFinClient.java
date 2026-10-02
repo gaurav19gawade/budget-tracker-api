@@ -4,7 +4,12 @@ import com.budgettracker.application.port.BankDataProvider;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.web.client.RestClient;
 
@@ -17,6 +22,8 @@ import org.springframework.web.client.RestClient;
  *   <li>{@link #claimAccessUrl} decodes the base64 token → claim URL, then POSTs to it to
  *       exchange it for a persistent access URL (one-time operation).
  *   <li>{@link #fetchAccounts} GETs {accessUrl}/accounts using credentials embedded in the URL.
+ *   <li>{@link #fetchTransactionsWithBalances} GETs {accessUrl}/accounts?start-date={epoch}
+ *       to get both updated balances and transactions since the given date.
  * </ol>
  */
 public class SimpleFinClient {
@@ -43,24 +50,51 @@ public class SimpleFinClient {
 
     /** GETs {accessUrl}/accounts; credentials are extracted from the URL and sent as Basic auth. */
     public List<BankDataProvider.ProviderAccount> fetchAccounts(String accessUrl) {
+        SimpleFinAccountsResponse response = doGet(accessUrl, null);
+        return parseAccounts(response);
+    }
+
+    /**
+     * GETs {accessUrl}/accounts?start-date={since epoch seconds}.
+     * Returns updated balances and all transactions since {@code since}.
+     */
+    public BankDataProvider.SyncResult fetchTransactionsWithBalances(String accessUrl, Instant since) {
+        SimpleFinAccountsResponse response = doGet(accessUrl, since);
+
+        List<BankDataProvider.ProviderAccount> accounts = parseAccounts(response);
+        List<BankDataProvider.ProviderTransaction> transactions = parseTransactions(response);
+        return new BankDataProvider.SyncResult(accounts, transactions);
+    }
+
+    // ---- private helpers -------------------------------------------------------
+
+    private SimpleFinAccountsResponse doGet(String accessUrl, Instant startDate) {
         URI uri = URI.create(accessUrl.trim() + "/accounts");
         String userInfo = uri.getUserInfo();
         if (userInfo == null || userInfo.isBlank()) {
             throw new IllegalArgumentException("SimpleFin access URL has no embedded credentials.");
         }
-        // Rebuild the URL without credentials for the HTTP request.
-        String requestUrl = uri.getScheme() + "://" + uri.getHost()
+        // Rebuild the URL without embedded credentials.
+        String base = uri.getScheme() + "://" + uri.getHost()
                 + (uri.getPort() > 0 ? ":" + uri.getPort() : "")
                 + uri.getPath();
+        String requestUrl = startDate != null
+                ? base + "?start-date=" + startDate.getEpochSecond()
+                : base;
+
+        String authHeader = "Basic " + Base64.getEncoder()
+                .encodeToString(userInfo.getBytes(StandardCharsets.UTF_8));
 
         SimpleFinAccountsResponse response = http.get()
                 .uri(requestUrl)
-                .header("Authorization", "Basic " + Base64.getEncoder()
-                        .encodeToString(userInfo.getBytes(StandardCharsets.UTF_8)))
+                .header("Authorization", authHeader)
                 .retrieve()
                 .body(SimpleFinAccountsResponse.class);
+        return response != null ? response : new SimpleFinAccountsResponse(null, null);
+    }
 
-        if (response == null || response.accounts() == null) return List.of();
+    private List<BankDataProvider.ProviderAccount> parseAccounts(SimpleFinAccountsResponse response) {
+        if (response.accounts() == null) return List.of();
         return response.accounts().stream()
                 .map(a -> new BankDataProvider.ProviderAccount(
                         a.id(),
@@ -75,6 +109,36 @@ public class SimpleFinClient {
                         parseDecimal(a.availableBalance()),
                         parseDecimal(a.balance())))
                 .toList();
+    }
+
+    private List<BankDataProvider.ProviderTransaction> parseTransactions(
+            SimpleFinAccountsResponse response) {
+        if (response.accounts() == null) return List.of();
+        List<BankDataProvider.ProviderTransaction> result = new ArrayList<>();
+        for (SimpleFinAccountsResponse.SimpleFinAccount account : response.accounts()) {
+            List<SimpleFinAccountsResponse.SimpleFinTransaction> txns = account.transactions();
+            if (txns == null) continue;
+            for (SimpleFinAccountsResponse.SimpleFinTransaction t : txns) {
+                boolean pending = (t.posted() == 0);
+                LocalDate postedDate = pending ? null
+                        : Instant.ofEpochSecond(t.posted()).atZone(ZoneOffset.UTC).toLocalDate();
+                LocalDate transactedAt = (t.transactedAt() > 0)
+                        ? Instant.ofEpochSecond(t.transactedAt()).atZone(ZoneOffset.UTC).toLocalDate()
+                        : null;
+                result.add(new BankDataProvider.ProviderTransaction(
+                        t.id(),
+                        account.id(),
+                        parseDecimal(t.amount()),
+                        account.currency() != null ? account.currency() : "USD",
+                        t.description(),
+                        t.payee(),
+                        t.memo(),
+                        postedDate,
+                        transactedAt,
+                        pending));
+            }
+        }
+        return Collections.unmodifiableList(result);
     }
 
     private static BigDecimal parseDecimal(String value) {

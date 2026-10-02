@@ -2,6 +2,7 @@ package com.budgettracker.infrastructure.persistence;
 
 import com.budgettracker.application.port.EnrollmentRepository;
 import com.budgettracker.domain.TellerEnrollment;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
@@ -31,6 +32,11 @@ class EnrollmentRepositoryAdapter implements EnrollmentRepository {
     @Override
     public Optional<TellerEnrollment> findByTellerId(String tellerId) {
         return jpa.findByTellerId(tellerId).map(this::toDomain);
+    }
+
+    @Override
+    public List<TellerEnrollment> findByHouseholdId(UUID householdId) {
+        return jpa.findByHouseholdId(householdId).stream().map(this::toDomain).toList();
     }
 
     @Override

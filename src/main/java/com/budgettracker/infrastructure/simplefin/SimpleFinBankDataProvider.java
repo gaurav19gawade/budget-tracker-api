@@ -1,6 +1,7 @@
 package com.budgettracker.infrastructure.simplefin;
 
 import com.budgettracker.application.port.BankDataProvider;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -21,5 +22,10 @@ public class SimpleFinBankDataProvider implements BankDataProvider {
     @Override
     public List<ProviderAccount> fetchAccounts(String accessCredential) {
         return client.fetchAccounts(accessCredential);
+    }
+
+    @Override
+    public SyncResult fetchTransactionsWithBalances(String accessCredential, Instant since) {
+        return client.fetchTransactionsWithBalances(accessCredential, since);
     }
 }

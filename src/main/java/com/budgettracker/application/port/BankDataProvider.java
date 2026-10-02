@@ -1,6 +1,8 @@
 package com.budgettracker.application.port;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -23,6 +25,22 @@ public interface BankDataProvider {
             BigDecimal balanceLedger) {
     }
 
+    record ProviderTransaction(
+            String id,
+            String accountId,
+            BigDecimal amount,
+            String currency,
+            String description,
+            String payee,
+            String memo,
+            LocalDate postedDate,
+            LocalDate transactedAt,
+            boolean pending) {
+    }
+
+    record SyncResult(List<ProviderAccount> accounts, List<ProviderTransaction> transactions) {
+    }
+
     /**
      * Exchange a one-time setup token for a persistent access credential.
      * For SimpleFin Bridge this decodes the base64 token and POSTs to the claim URL.
@@ -33,4 +51,11 @@ public interface BankDataProvider {
      * Fetch all accounts for the given access credential, including current balances.
      */
     List<ProviderAccount> fetchAccounts(String accessCredential);
+
+    /**
+     * Fetch accounts with updated balances AND transactions since {@code since}.
+     * One network call per connection; callers should pass the earliest relevant date
+     * to avoid re-fetching already-synced data.
+     */
+    SyncResult fetchTransactionsWithBalances(String accessCredential, Instant since);
 }

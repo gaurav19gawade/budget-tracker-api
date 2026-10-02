@@ -21,4 +21,6 @@ public interface HouseholdRepository {
     List<HouseholdMember> findMembers(UUID householdId);
 
     boolean anyHouseholdExists();
+
+    List<UUID> findAllIds();
 }
