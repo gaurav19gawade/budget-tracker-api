@@ -2,7 +2,7 @@
 
 Everything needed to set up the project from scratch, in the order we did it.
 
-**Stack:** Next.js (Vercel) -> Spring Boot API (Railway) -> Postgres (Supabase). Login via Supabase Auth. Bank data via Teller.
+**Stack:** Next.js (Vercel) -> Spring Boot API (Railway) -> Postgres (Supabase). Login via Supabase Auth. Bank data via SimpleFin Bridge.
 
 **Repos:** `budget-tracker-api` (Java 21, Spring Boot 3.5, Maven) and `budget-tracker-web` (Next.js, TypeScript, Tailwind).
 
@@ -11,7 +11,7 @@ Everything needed to set up the project from scratch, in the order we did it.
 ## 1. Prerequisites (local machine)
 
 - Git, Docker (running), Java 21, Maven 3.9+, Node 22+ and npm
-- Accounts: GitHub, Supabase, Railway, Vercel, Teller
+- Accounts: GitHub, Supabase, Railway, Vercel, SimpleFin Bridge
 
 ## 2. GitHub
 
@@ -29,7 +29,7 @@ Everything needed to set up the project from scratch, in the order we did it.
 3. Get the **API values** for the frontend (Connect -> Framework, or Project Settings -> API Keys):
    - Project URL: `https://<ref>.supabase.co`
    - **Publishable key**: `sb_publishable_...` (this is what used to be called the "anon key")
-4. Never put the **secret key** (`sb_secret_...`), the database password, or any Teller certificate in the frontend or in Vercel.
+4. Never put the **secret key** (`sb_secret_...`), the database password, or the token encryption key in the frontend or in Vercel.
 
 ### Why the frontend needs the Supabase URL
 
@@ -46,20 +46,20 @@ It is only for **Supabase Auth** (sign-in). The browser signs in with Supabase a
 | `DATABASE_USERNAME` | database user |
 | `DATABASE_PASSWORD` | database password (set directly in Railway, never in chat or git) |
 | `DB_SCHEMA` | `budget` (optional, this is the default) |
-| `APP_CORS_ALLOWED_ORIGINS` | your Vercel URL, for example `https://budget-tracker-web.vercel.app` (comma-separated for several) |
-| `SUPABASE_JWKS_URI` | `https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` (Phase 1) |
-| `SUPABASE_ISSUER` | `https://<ref>.supabase.co/auth/v1` (Phase 1) |
+| `APP_CORS_ALLOWED_ORIGINS` | your Vercel URL, e.g. `https://budget-tracker-web.vercel.app` (comma-separated for several) |
+| `SUPABASE_JWKS_URI` | `https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` |
+| `SUPABASE_ISSUER` | `https://<ref>.supabase.co/auth/v1` |
 | `SUPABASE_JWS_ALGORITHM` | optional; `ES256` is the default and matches an ECC (P-256) signing key |
 | `BOOTSTRAP_OWNER_USER_ID` | your Supabase user id; set it after your first sign-up (see "First-time owner setup") |
+| `TELLER_TOKEN_ENCRYPTION_KEY` | AES-256 key for encrypting SimpleFin access URLs at rest. Generate: `openssl rand -base64 32` |
 
-### First-time owner setup (Phase 1)
+### First-time owner setup
 
 1. Deploy the API and the web app with the variables above (leave `BOOTSTRAP_OWNER_USER_ID` empty for now).
-2. In Supabase -> Authentication, turn off "Confirm email" if you don't want email confirmation (we chose to keep it simple for now).
-3. Open the web app and create your account. You will land on a "Join your household" page that shows your **user id**.
-4. Copy that id into `BOOTSTRAP_OWNER_USER_ID` in Railway and let it redeploy. (It is also under Supabase -> Authentication -> Users.)
-5. Reload the app and click **Create household**.
-6. Go to **Household** -> **Create invite link**, send the link to your partner. They create an account, open the link and click **Join household**.
+2. Open the web app and create your account. You will land on a "Join your household" page that shows your **user id**.
+3. Copy that id into `BOOTSTRAP_OWNER_USER_ID` in Railway and let it redeploy.
+4. Reload the app and click **Create household**.
+5. Go to **Household** -> **Create invite link**, send the link to your partner. They create an account, open the link and click **Join household**.
 
 Why the owner is identified by user id and not by email: with email confirmation off, anyone can sign up with any email address, so an email check could be claimed by someone else. A user id cannot be.
 
@@ -80,25 +80,33 @@ Error: `Found non-empty schema(s) "public" but no schema history table`.
 ## 5. Frontend on Vercel
 
 1. Import the `budget-tracker-web` repo. Framework preset: Next.js. Root directory: `./`.
-2. Environment variables (Production and Preview). Only `NEXT_PUBLIC_` values belong here, because they are visible in the browser:
+2. Environment variables (Production and Preview). Vercel blocks `NEXT_PUBLIC_` prefixed names — instead set non-prefixed names and `next.config.ts` maps them to `NEXT_PUBLIC_*` at build time:
 
 | Variable | Value |
 |---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | Railway URL, no trailing slash |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...` |
-| `NEXT_PUBLIC_TELLER_APPLICATION_ID` | later (Phase 2) |
-| `NEXT_PUBLIC_TELLER_ENV` | `sandbox` to start (later) |
+| `API_BASE_URL` | Railway URL, no trailing slash, e.g. `https://budget-tracker-api.up.railway.app` |
+| `SUPABASE_PROJECT_URL` | `https://<ref>.supabase.co` |
+| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...` |
 
 3. Deploy. Then set `APP_CORS_ALLOWED_ORIGINS` in Railway to the Vercel URL, or browser calls to the API will be blocked.
 
-## 6. Teller (bank data, Phase 2)
+## 6. SimpleFin Bridge (bank data)
 
-- **Sandbox:** free, unlimited, **simulated** data. It never connects to real banks.
-- **Development:** free, **real** bank data, capped at 100 enrollments.
-- **Production:** paid, unlimited.
-- Development and production need an mTLS **client certificate and key** on backend calls. Download them from the Teller dashboard and store them in Railway as base64 (`TELLER_CERT_PEM_BASE64`, `TELLER_KEY_PEM_BASE64`).
-- Check that your banks and card issuers appear in Teller Connect (sandbox first, then development). If not, the `BankDataProvider` interface lets us swap providers.
+We replaced Teller (which shut down) with [SimpleFin Bridge](https://beta-bridge.simplefin.org/info/developers).
+
+**How it works:**
+1. Create an application at `beta-bridge.simplefin.org`. Each application gets one pool of connections.
+2. In the app, click **Connect account** to open the two-step flow:
+   - **Step 1:** Visit `beta-bridge.simplefin.org/create`, connect your financial institution, and copy the setup token.
+   - **Step 2:** Paste the token into the app and click **Connect**.
+3. The backend exchanges the token for a persistent access URL (one-time claim), fetches accounts and balances, and stores the encrypted access URL.
+
+**Limits:**
+- The beta tier allows approximately **24 requests per day** (~1 per hour) to the accounts endpoint.
+- Balances are only refreshed when explicitly requested — there is no push/webhook.
+- The token encryption key (`TELLER_TOKEN_ENCRYPTION_KEY`) is already set from the initial setup.
+
+**No additional Railway or Vercel env vars are needed** for SimpleFin beyond what's already set.
 
 ## 7. Run everything locally (production-like, no cloud services)
 
@@ -134,7 +142,7 @@ Notes:
 mvn verify                      # needs Docker running
 
 # frontend
-npm run lint && npx tsc --noEmit && npm run build
+npm run lint && npm run build
 ```
 
 ## 9. Troubleshooting
@@ -142,21 +150,26 @@ npm run lint && npx tsc --noEmit && npm run build
 | Symptom | Cause | Fix |
 |---|---|---|
 | Flyway: non-empty schema "public" | Supabase's `public` is never empty | Dedicated `budget` schema (section 4) |
-| Can't find the "anon key" in Supabase | Renamed to the publishable key | Use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
-| Browser blocks calls to the API | CORS doesn't allow the frontend origin | Set `APP_CORS_ALLOWED_ORIGINS` in Railway |
+| Can't find the "anon key" in Supabase | Renamed to the publishable key | Use `SUPABASE_PUBLISHABLE_KEY` in Vercel |
+| Browser blocks calls to the API | CORS doesn't allow the frontend origin | Set `APP_CORS_ALLOWED_ORIGINS` in Railway with `https://` prefix |
 | Local app refuses to start with "Profile 'local'..." | `local` profile pointed at a non-localhost database | Use the Docker Postgres on `localhost:5433` |
 | `vercel env pull` returns nothing | Variables only set for Production and Preview | Tick Development, or `--environment=preview` |
 | Port 5432 already in use | Local Postgres already running | Compose uses host port 5433 on purpose |
-| Next.js build fails fetching Google Fonts | Network blocks Google Fonts | The app uses a system font stack, no Google Fonts needed |
+| API URL treated as relative path | `API_BASE_URL` in Vercel missing `https://` scheme | Set to `https://budget-tracker-api.up.railway.app` (full URL) |
+| Railway startup crash: "Failed to configure Teller mTLS client" | Old env vars with base64 newlines (Teller era, now removed) | Remove `TELLER_CERT_PEM_BASE64` and `TELLER_KEY_PEM_BASE64` from Railway |
+| SimpleFin connect returns error | Setup token already used (one-time) | Go to SimpleFin Bridge and generate a new setup token |
+| Email confirmation redirects to localhost | Supabase Site URL not updated | In Supabase Auth settings, set Site URL to your Vercel URL; add `https://your-app.vercel.app/**` and `http://localhost:3000/**` to Redirect URLs |
 
 ## 10. Project status
 
-- **Phase 0 (foundations):** done once both deploys are healthy and CI is green.
-- **Next, Phase 1:** Supabase login, households, partner invite, JWT validation in the API, fixed dev user for the local profile.
-- Full plan and design decisions (transfer detection, account removal, budget rollover, sync) are in `tasks/todo.md`.
+- **Phase 0 (foundations):** done — both deploys healthy, CI green.
+- **Phase 1 (auth + households):** done — Supabase JWT validation, households, invite flow, partner join.
+- **Phase 2 (bank accounts):** done — SimpleFin Bridge connect/remove, encrypted access URL storage, accounts page.
+- **Next, Phase 3:** transaction sync engine (see `todo.md`).
 
 ## 11. Rules to remember
 
-- Secrets (database password, secret key, Teller certificate, token encryption key) live only in Railway, never in git, chat or Vercel.
-- Only `NEXT_PUBLIC_` values go to Vercel.
+- Secrets (database password, `TELLER_TOKEN_ENCRYPTION_KEY`) live only in Railway, never in git, chat or Vercel.
+- `API_BASE_URL`, `SUPABASE_PROJECT_URL`, `SUPABASE_PUBLISHABLE_KEY` go to Vercel (not `NEXT_PUBLIC_*` — Vercel blocks that prefix; `next.config.ts` maps them).
 - Never run the `local` profile against a real database.
+- SimpleFin access URLs contain embedded credentials — they are encrypted at rest in the `teller_enrollment` table and never logged.
