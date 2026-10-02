@@ -1,9 +1,11 @@
 package com.budgettracker;
 
+import com.budgettracker.application.port.BankDataProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -16,7 +18,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(properties = {
         "app.supabase.jwks-uri=http://localhost:1/jwks.json",
         "app.supabase.issuer=http://localhost/auth/v1",
-        "app.bootstrap-owner-user-id=" + IntegrationTestBase.OWNER_ID
+        "app.bootstrap-owner-user-id=" + IntegrationTestBase.OWNER_ID,
+        // 32 zero-bytes as base64 — test-only AES key for TokenEncryptionService.
+        "app.teller.token-encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 @AutoConfigureMockMvc
 abstract class IntegrationTestBase {
@@ -36,12 +40,16 @@ abstract class IntegrationTestBase {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
+    @MockBean
+    BankDataProvider bankData;
+
     @Autowired
     JdbcTemplate jdbc;
 
     @BeforeEach
     void cleanDatabase() {
-        jdbc.execute("TRUNCATE budget.household_invite, budget.household_member, "
+        jdbc.execute("TRUNCATE budget.bank_account, budget.teller_enrollment, "
+                + "budget.household_invite, budget.household_member, "
                 + "budget.household, budget.app_user CASCADE");
     }
 }

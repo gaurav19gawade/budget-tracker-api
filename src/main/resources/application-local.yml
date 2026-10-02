@@ -6,6 +6,11 @@ spring:
     username: budget
     password: budget
 
+app:
+  teller:
+    # Local dev placeholder — not a real key. Override for real Teller calls locally.
+    token-encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
 logging:
   level:
     com.budgettracker: DEBUG
