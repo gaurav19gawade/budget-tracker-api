@@ -51,7 +51,7 @@ It is only for **Supabase Auth** (sign-in). The browser signs in with Supabase a
 | `SUPABASE_ISSUER` | `https://<ref>.supabase.co/auth/v1` |
 | `SUPABASE_JWS_ALGORITHM` | optional; `ES256` is the default and matches an ECC (P-256) signing key |
 | `BOOTSTRAP_OWNER_USER_ID` | your Supabase user id; set it after your first sign-up (see "First-time owner setup") |
-| `TELLER_TOKEN_ENCRYPTION_KEY` | AES-256 key for encrypting SimpleFin access URLs at rest. Generate: `openssl rand -base64 32` |
+| `TOKEN_ENCRYPTION_KEY` | AES-256 key for encrypting SimpleFin access URLs at rest. Generate: `openssl rand -base64 32` |
 
 ### First-time owner setup
 
@@ -104,7 +104,7 @@ We replaced Teller (which shut down) with [SimpleFin Bridge](https://beta-bridge
 **Limits:**
 - The beta tier allows approximately **24 requests per day** (~1 per hour) to the accounts endpoint.
 - Balances are only refreshed when explicitly requested — there is no push/webhook.
-- The token encryption key (`TELLER_TOKEN_ENCRYPTION_KEY`) is already set from the initial setup.
+- The token encryption key (`TOKEN_ENCRYPTION_KEY`) is already set from the initial setup.
 
 **No additional Railway or Vercel env vars are needed** for SimpleFin beyond what's already set.
 
@@ -169,7 +169,7 @@ npm run lint && npm run build
 
 ## 11. Rules to remember
 
-- Secrets (database password, `TELLER_TOKEN_ENCRYPTION_KEY`) live only in Railway, never in git, chat or Vercel.
+- Secrets (database password, `TOKEN_ENCRYPTION_KEY`) live only in Railway, never in git, chat or Vercel.
 - `API_BASE_URL`, `SUPABASE_PROJECT_URL`, `SUPABASE_PUBLISHABLE_KEY` go to Vercel (not `NEXT_PUBLIC_*` — Vercel blocks that prefix; `next.config.ts` maps them).
 - Never run the `local` profile against a real database.
 - SimpleFin access URLs contain embedded credentials — they are encrypted at rest in the `teller_enrollment` table and never logged.

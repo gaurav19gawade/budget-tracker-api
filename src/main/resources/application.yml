@@ -11,7 +11,7 @@ app:
   teller:
     # AES-256 key for encrypting SimpleFin access URLs at rest.
     # Generate with: openssl rand -base64 32
-    token-encryption-key: ${TELLER_TOKEN_ENCRYPTION_KEY}
+    token-encryption-key: ${TOKEN_ENCRYPTION_KEY}
   supabase:
     # https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
     jwks-uri: ${SUPABASE_JWKS_URI:}
