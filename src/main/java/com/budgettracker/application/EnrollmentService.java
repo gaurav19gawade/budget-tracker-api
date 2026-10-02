@@ -80,7 +80,7 @@ public class EnrollmentService {
                     UUID.randomUUID(), ctx.householdId(), enrollment.id(),
                     pa.id(), pa.institution(), pa.name(), pa.type(), pa.subtype(),
                     pa.lastFour(), pa.currency() != null ? pa.currency() : "USD",
-                    pa.balanceAvailable(), pa.balanceLedger(), now,
+                    pa.balanceAvailable(), pa.balanceLedger(), null,
                     "active", now, null)));
         }
         return result;
