@@ -53,8 +53,8 @@ public class TellerConfig {
     }
 
     private SSLContext buildSslContext(String certBase64, String keyBase64) throws Exception {
-        String certPem = new String(Base64.getDecoder().decode(certBase64));
-        String keyPem = new String(Base64.getDecoder().decode(keyBase64));
+        String certPem = new String(Base64.getMimeDecoder().decode(certBase64));
+        String keyPem = new String(Base64.getMimeDecoder().decode(keyBase64));
 
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         X509Certificate cert = (X509Certificate) cf.generateCertificate(
