@@ -145,7 +145,54 @@ mvn verify                      # needs Docker running
 npm run lint && npm run build
 ```
 
-## 9. Troubleshooting
+## 9. The household ID
+
+Every piece of data in the app (accounts, transactions, enrollments) belongs to a **household** — a UUID that ties a group of users to their shared financial data. This is the top-level tenant identifier.
+
+**Why it appears in SQL operations:** most manual DB fixes are scoped by `household_id` so they only touch one household's data. In a multi-household deployment this is essential. In a single-household personal deployment it's just good hygiene — but you can omit the `WHERE` clause safely since there's only one household anyway.
+
+**Where to find your household ID:**
+- Railway logs: search for `Nightly sync started for 1 household(s)` — the line after it logs the UUID.
+- Supabase table editor: open the `budget.household` table.
+
+**Example — resetting the SimpleFin transaction sync window** (see troubleshooting table below):
+```sql
+-- Personal single-household install (no WHERE needed):
+UPDATE budget.bank_account SET last_synced_at = NULL;
+
+-- Multi-household install (scope to one household):
+UPDATE budget.bank_account SET last_synced_at = NULL
+WHERE household_id = '<your-household-uuid>';
+```
+
+## 10. Making the app public (multi-user)
+
+The app is architected for multi-tenancy — each household is isolated — but a few things need to change before opening it to strangers.
+
+### What already works at scale
+- The `household` / `bank_account` / `transaction` data model is already multi-tenant; all queries are scoped by `household_id`.
+- The nightly scheduler already iterates **all** households and syncs them.
+- Supabase signup is open by default, so new users can create accounts.
+- Row isolation is enforced at the API layer (every endpoint resolves the caller's household from their JWT before touching data).
+
+### What needs to change
+
+| Area | Current behaviour | What to do |
+|---|---|---|
+| **Self-registration** | `BOOTSTRAP_OWNER_USER_ID` lets only one person create the first household. Everyone else must be invited. | Remove `BOOTSTRAP_OWNER_USER_ID` and add a "Create my household" flow that any authenticated user can trigger on first login. |
+| **Invite-only join** | New users must be invited by an existing household member. | Keep for households (prevents accidental cross-household joins), but let any user create their own household on first login. |
+| **SimpleFin rate limit** | ~24 requests/day per SimpleFin application. | Each user supplies their own SimpleFin setup token (already the case), so each user's connection has its own rate-limit budget. The nightly scheduler will issue one request per household — monitor total request count as you grow. |
+| **Token encryption key** | One shared `TOKEN_ENCRYPTION_KEY` encrypts all SimpleFin access URLs. | Acceptable for a small trusted deployment. For a public app, consider per-household encryption or a key-management service so a single leaked key doesn't expose all users. |
+| **CORS** | `APP_CORS_ALLOWED_ORIGINS` is locked to your Vercel URL. | No change needed if all users share the same frontend. |
+| **DB connection pool** | `DB_POOL_SIZE` defaults to 5. | Increase and monitor as household count grows; Supabase's pooler handles bursts well. |
+| **Supabase signup controls** | Open — anyone can sign up. | Add email domain restrictions in Supabase Auth settings, or keep open and rely on household isolation. |
+
+### What you do NOT need to change
+- Security config — JWT validation, per-request household resolution, and data isolation are already correct.
+- The nightly sync scheduler — it already handles N households.
+- The DB schema — `household_id` foreign keys are already on every table.
+
+## 11. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -159,15 +206,16 @@ npm run lint && npm run build
 | Railway startup crash: "Failed to configure Teller mTLS client" | Old env vars with base64 newlines (Teller era, now removed) | Remove `TELLER_CERT_PEM_BASE64` and `TELLER_KEY_PEM_BASE64` from Railway |
 | SimpleFin connect returns error | Setup token already used (one-time) | Go to SimpleFin Bridge and generate a new setup token |
 | Email confirmation redirects to localhost | Supabase Site URL not updated | In Supabase Auth settings, set Site URL to your Vercel URL; add `https://your-app.vercel.app/**` and `http://localhost:3000/**` to Redirect URLs |
+| Nightly sync logs "0 new, 0 updated" after first connect, transactions never appear | SimpleFin takes 24–48 h to backfill bank history. The first nightly sync ran before the backfill finished and advanced `last_synced_at`, locking out the 90-day lookback window. | `UPDATE budget.bank_account SET last_synced_at = NULL;` in the Railway DB console, then click "Sync now". The code fix (don't advance `last_synced_at` on an empty initial sync) prevents this recurring. |
 
-## 10. Project status
+## 12. Project status
 
 - **Phase 0 (foundations):** done — both deploys healthy, CI green.
 - **Phase 1 (auth + households):** done — Supabase JWT validation, households, invite flow, partner join.
 - **Phase 2 (bank accounts):** done — SimpleFin Bridge connect/remove, encrypted access URL storage, accounts page.
 - **Next, Phase 3:** transaction sync engine (see `todo.md`).
 
-## 11. Rules to remember
+## 13. Rules to remember
 
 - Secrets (database password, `TOKEN_ENCRYPTION_KEY`) live only in Railway, never in git, chat or Vercel.
 - `API_BASE_URL`, `SUPABASE_PROJECT_URL`, `SUPABASE_PUBLISHABLE_KEY` go to Vercel (not `NEXT_PUBLIC_*` — Vercel blocks that prefix; `next.config.ts` maps them).

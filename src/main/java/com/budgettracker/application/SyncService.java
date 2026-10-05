@@ -92,25 +92,20 @@ public class SyncService {
                 .map(t -> t.minus(LOOKBACK_BUFFER_DAYS, ChronoUnit.DAYS))
                 .orElseGet(() -> clock.instant().minus(INITIAL_LOOKBACK_DAYS, ChronoUnit.DAYS));
 
+        // Track whether this is an initial sync before fetching, so we can decide
+        // whether to advance last_synced_at if SimpleFin returns 0 transactions.
+        // On a first-ever sync SimpleFin may not have finished backfilling the bank,
+        // so we must not advance the window until we actually receive data.
+        boolean isInitialSync = activeAccounts.stream()
+                .allMatch(a -> a.lastSyncedAt() == null);
+
         BankDataProvider.SyncResult result =
                 bankData.fetchTransactionsWithBalances(accessCredential, since);
 
         Instant now = clock.instant();
 
-        // Update account balances and last_synced_at.
-        for (BankDataProvider.ProviderAccount pa : result.accounts()) {
-            activeAccounts.stream()
-                    .filter(a -> a.tellerId().equals(pa.id()))
-                    .findFirst()
-                    .ifPresent(a -> accounts.save(new BankAccount(
-                            a.id(), a.householdId(), a.enrollmentId(), a.tellerId(),
-                            pa.institution(), pa.name(), a.type(), a.subtype(),
-                            a.lastFour(), a.currency(),
-                            pa.balanceAvailable(), pa.balanceLedger(),
-                            now, a.status(), a.createdAt(), a.removedAt())));
-        }
-
-        // Upsert transactions.
+        // Upsert transactions first so we know whether any were received before
+        // deciding whether to stamp last_synced_at on the accounts below.
         int newCount = 0;
         int updatedCount = 0;
         for (BankDataProvider.ProviderTransaction pt : result.transactions()) {
@@ -143,6 +138,28 @@ public class SyncService {
             boolean isNew = transactions.upsert(tx);
             if (isNew) newCount++;
             else updatedCount++;
+        }
+
+        // Advance last_synced_at only when it is safe to do so: either this is an
+        // incremental sync (last_synced_at was already set, so the 90-day window is
+        // already gone) or we actually received transactions on this initial sync.
+        // Keeping it null lets the next sync retry the full INITIAL_LOOKBACK_DAYS
+        // window, which is important when SimpleFin finishes backfilling after the
+        // first connection.
+        boolean gotTransactions = (newCount + updatedCount) > 0;
+        Instant nextLastSyncedAt = (!isInitialSync || gotTransactions) ? now : null;
+
+        // Update account balances (and last_synced_at when appropriate).
+        for (BankDataProvider.ProviderAccount pa : result.accounts()) {
+            activeAccounts.stream()
+                    .filter(a -> a.tellerId().equals(pa.id()))
+                    .findFirst()
+                    .ifPresent(a -> accounts.save(new BankAccount(
+                            a.id(), a.householdId(), a.enrollmentId(), a.tellerId(),
+                            pa.institution(), pa.name(), a.type(), a.subtype(),
+                            a.lastFour(), a.currency(),
+                            pa.balanceAvailable(), pa.balanceLedger(),
+                            nextLastSyncedAt, a.status(), a.createdAt(), a.removedAt())));
         }
 
         return new SyncStats(newCount, updatedCount, now);
