@@ -20,6 +20,8 @@ public record Transaction(
         boolean pending,
         boolean isInternalTransfer,
         UUID transferGroupId,
+        UUID categoryId,
+        boolean categoryOverride,
         Instant createdAt,
         Instant updatedAt) {
 }

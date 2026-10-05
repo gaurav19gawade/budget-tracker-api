@@ -2,8 +2,10 @@ package com.budgettracker.application;
 
 import com.budgettracker.application.port.BankAccountRepository;
 import com.budgettracker.application.port.BankDataProvider;
+import com.budgettracker.application.port.CategoryRuleRepository;
 import com.budgettracker.application.port.EnrollmentRepository;
 import com.budgettracker.application.port.TransactionRepository;
+import com.budgettracker.domain.CategoryRule;
 import com.budgettracker.domain.BankAccount;
 import com.budgettracker.domain.TellerEnrollment;
 import com.budgettracker.domain.Transaction;
@@ -34,6 +36,8 @@ public class SyncService {
     private final BankAccountRepository accounts;
     private final TransactionRepository transactions;
     private final BankDataProvider bankData;
+    private final CategoryRuleRepository categoryRules;
+    private final Categorizer categorizer;
     private final TokenEncryptionService encryption;
     private final Clock clock;
 
@@ -41,12 +45,16 @@ public class SyncService {
                        BankAccountRepository accounts,
                        TransactionRepository transactions,
                        BankDataProvider bankData,
+                       CategoryRuleRepository categoryRules,
+                       Categorizer categorizer,
                        TokenEncryptionService encryption,
                        Clock clock) {
         this.enrollments = enrollments;
         this.accounts = accounts;
         this.transactions = transactions;
         this.bankData = bankData;
+        this.categoryRules = categoryRules;
+        this.categorizer = categorizer;
         this.encryption = encryption;
         this.clock = clock;
     }
@@ -104,6 +112,9 @@ public class SyncService {
 
         Instant now = clock.instant();
 
+        // Load rules once for this household so we can auto-categorise every new transaction.
+        List<CategoryRule> ruleList = categoryRules.findByHouseholdId(enrollment.householdId());
+
         // Upsert transactions first so we know whether any were received before
         // deciding whether to stamp last_synced_at on the accounts below.
         int newCount = 0;
@@ -118,6 +129,8 @@ public class SyncService {
                         pt.accountId(), pt.id());
                 continue;
             }
+            UUID categoryId = categorizer.categorize(
+                    pt.payee(), pt.description(), pt.amount(), account.id(), ruleList);
             Transaction tx = new Transaction(
                     UUID.randomUUID(),
                     enrollment.householdId(),
@@ -133,6 +146,8 @@ public class SyncService {
                     pt.pending(),
                     false,
                     null,
+                    categoryId,
+                    false,
                     now,
                     now);
             boolean isNew = transactions.upsert(tx);

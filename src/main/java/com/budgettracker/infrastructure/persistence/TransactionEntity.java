@@ -55,6 +55,12 @@ class TransactionEntity {
     @Column(name = "transfer_group_id")
     UUID transferGroupId;
 
+    @Column(name = "category_id")
+    UUID categoryId;
+
+    @Column(name = "category_override", nullable = false)
+    boolean categoryOverride;
+
     @Column(name = "created_at", nullable = false)
     Instant createdAt;
 

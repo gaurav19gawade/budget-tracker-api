@@ -17,5 +17,7 @@ public record TransactionView(
         LocalDate transactedAt,
         boolean pending,
         boolean isInternalTransfer,
+        UUID categoryId,
+        boolean categoryOverride,
         Instant createdAt) {
 }

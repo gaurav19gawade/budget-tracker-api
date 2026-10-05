@@ -20,13 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class HouseholdBootstrapper {
 
     private final HouseholdRepository households;
+    private final CategoryService categoryService;
     private final Clock clock;
     private final String ownerUserId;
 
     public HouseholdBootstrapper(HouseholdRepository households,
+                                 CategoryService categoryService,
                                  Clock clock,
                                  @Value("${app.bootstrap-owner-user-id:}") String ownerUserId) {
         this.households = households;
+        this.categoryService = categoryService;
         this.clock = clock;
         this.ownerUserId = ownerUserId == null ? "" : ownerUserId.trim();
     }
@@ -51,6 +54,7 @@ public class HouseholdBootstrapper {
         }
         Household household = households.create(new Household(UUID.randomUUID(), "Our household"));
         households.addMember(household.id(), userId, clock.instant());
+        categoryService.seedDefaultsIfNone(household.id());
         return household;
     }
 

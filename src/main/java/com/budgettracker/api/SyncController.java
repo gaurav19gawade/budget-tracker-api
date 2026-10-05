@@ -66,6 +66,7 @@ public class SyncController {
                 t.description(), t.payee(), t.memo(),
                 t.postedDate(), t.transactedAt(),
                 t.pending(), t.isInternalTransfer(),
+                t.categoryId(), t.categoryOverride(),
                 t.createdAt());
     }
 }

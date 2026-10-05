@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 interface TransactionJpaRepository extends JpaRepository<TransactionEntity, UUID> {
 
@@ -12,4 +15,16 @@ interface TransactionJpaRepository extends JpaRepository<TransactionEntity, UUID
 
     List<TransactionEntity> findByHouseholdIdAndPostedDateBetweenOrderByPostedDateDescCreatedAtDesc(
             UUID householdId, LocalDate from, LocalDate to);
+
+    List<TransactionEntity> findByHouseholdIdOrderByPostedDateDescCreatedAtDesc(UUID householdId);
+
+    @Modifying
+    @Query("UPDATE TransactionEntity t SET t.categoryId = :categoryId, t.categoryOverride = :override WHERE t.id = :id")
+    void updateCategory(@Param("id") UUID id,
+                        @Param("categoryId") UUID categoryId,
+                        @Param("override") boolean override);
+
+    @Modifying
+    @Query("UPDATE TransactionEntity t SET t.categoryId = :toId WHERE t.categoryId = :fromId")
+    void reassignCategory(@Param("fromId") UUID fromId, @Param("toId") UUID toId);
 }

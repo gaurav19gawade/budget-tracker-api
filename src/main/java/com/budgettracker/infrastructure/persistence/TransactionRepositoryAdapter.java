@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 class TransactionRepositoryAdapter implements TransactionRepository {
@@ -32,6 +33,8 @@ class TransactionRepositoryAdapter implements TransactionRepository {
             e.transactedAt = t.transactedAt();
             e.pending = t.pending();
             e.updatedAt = t.updatedAt();
+            // category_id and category_override are intentionally NOT updated here:
+            // sync never overwrites a user's manual categorisation choice.
             jpa.saveAndFlush(e);
             return false;
         }
@@ -51,6 +54,8 @@ class TransactionRepositoryAdapter implements TransactionRepository {
         e.pending = t.pending();
         e.isInternalTransfer = t.isInternalTransfer();
         e.transferGroupId = t.transferGroupId();
+        e.categoryId = t.categoryId();
+        e.categoryOverride = t.categoryOverride();
         e.createdAt = t.createdAt();
         e.updatedAt = t.updatedAt();
         jpa.saveAndFlush(e);
@@ -66,12 +71,33 @@ class TransactionRepositoryAdapter implements TransactionRepository {
                 .toList();
     }
 
+    @Override
+    public List<Transaction> findAllByHouseholdId(UUID householdId) {
+        return jpa.findByHouseholdIdOrderByPostedDateDescCreatedAtDesc(householdId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void updateCategory(UUID transactionId, UUID categoryId, boolean categoryOverride) {
+        jpa.updateCategory(transactionId, categoryId, categoryOverride);
+    }
+
+    @Override
+    @Transactional
+    public void reassignCategory(UUID fromCategoryId, UUID toCategoryId) {
+        jpa.reassignCategory(fromCategoryId, toCategoryId);
+    }
+
     private Transaction toDomain(TransactionEntity e) {
         return new Transaction(
                 e.id, e.householdId, e.accountId, e.providerId,
                 e.amount, e.currency, e.description, e.payee, e.memo,
                 e.postedDate, e.transactedAt, e.pending,
                 e.isInternalTransfer, e.transferGroupId,
+                e.categoryId, e.categoryOverride,
                 e.createdAt, e.updatedAt);
     }
 }

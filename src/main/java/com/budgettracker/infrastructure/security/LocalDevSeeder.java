@@ -1,5 +1,6 @@
 package com.budgettracker.infrastructure.security;
 
+import com.budgettracker.application.CategoryService;
 import com.budgettracker.application.UserProvisioner;
 import com.budgettracker.application.identity.AuthenticatedPrincipal;
 import com.budgettracker.application.port.HouseholdRepository;
@@ -20,11 +21,14 @@ class LocalDevSeeder implements ApplicationRunner {
 
     private final UserProvisioner provisioner;
     private final HouseholdRepository households;
+    private final CategoryService categoryService;
     private final Clock clock;
 
-    LocalDevSeeder(UserProvisioner provisioner, HouseholdRepository households, Clock clock) {
+    LocalDevSeeder(UserProvisioner provisioner, HouseholdRepository households,
+                   CategoryService categoryService, Clock clock) {
         this.provisioner = provisioner;
         this.households = households;
+        this.categoryService = categoryService;
         this.clock = clock;
     }
 
@@ -39,5 +43,6 @@ class LocalDevSeeder implements ApplicationRunner {
             households.addMember(LocalCurrentUserProvider.DEV_HOUSEHOLD_ID,
                     LocalCurrentUserProvider.DEV_USER_ID, clock.instant());
         }
+        categoryService.seedDefaultsIfNone(LocalCurrentUserProvider.DEV_HOUSEHOLD_ID);
     }
 }
