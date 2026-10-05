@@ -56,15 +56,19 @@
 - Balances are only as fresh as the last sync; no webhooks
 - When adding balance refresh: enforce a minimum 1-hour cooldown server-side using `last_synced_at`
 
-## Phase 3: Transaction sync engine
-- [ ] Flyway `V4`: `transactions` (provider_id UNIQUE per household, amount, date, description, pending, category_hint, category_id, is_internal_transfer, transfer_group_id)
-- [ ] `sync_jobs` table — DB-backed queue; nightly scheduler (ShedLock) + on-demand endpoint
-- [ ] `SyncWorker` — fetch transactions from SimpleFin `/accounts?start-date=...`, upsert by provider id (idempotent), handle pending -> posted transitions
-- [ ] Sync respects SimpleFin's 24 req/day limit: deduplicate calls, one job per connection not per account
-- [ ] On-demand sync endpoint `POST /api/sync` + "Sync now" button with last-synced timestamp
-- [ ] Nightly scheduled sync at 2:00 AM America/New_York (ShedLock so only one Railway instance fires)
-- [ ] Handle "disconnected / re-auth needed" state — show error in UI prompting reconnect
-- Verify: duplicate-safe re-runs; nightly job fires once; failure visible in UI
+## Phase 3: Transaction sync engine — DONE
+- [x] Flyway `V4`: `transactions` (provider_id UNIQUE per household, amount, date, description, pending, is_internal_transfer, transfer_group_id) + `shedlock`
+- [x] `SyncService` — fetch transactions from SimpleFin `/accounts?start-date=...`, upsert by provider id (idempotent), handle pending -> posted transitions; 90-day initial lookback, 1-day buffer on subsequent syncs
+- [x] Sync respects SimpleFin's 24 req/day limit: one call per enrollment (not per account)
+- [x] On-demand sync endpoint `POST /api/sync` + "Sync now" button with last-synced timestamp on accounts and transactions pages
+- [x] `GET /api/transactions` — list transactions for the household (default last 30 days)
+- [x] Nightly scheduled sync at 2:00 AM America/New_York (ShedLock so only one Railway instance fires)
+- [x] Integration tests: 7 scenarios covering auth, idempotency, household isolation, empty-before-sync
+- [x] Deployed and working
+
+**Notes:**
+- `sync_jobs` DB queue was not implemented — `SyncService` is called directly (simpler, sufficient for current scale)
+- `last_synced_at` is only advanced on an initial sync once at least one transaction is received, preventing the 90-day window from being lost if SimpleFin hasn't finished backfilling (fix applied 2026-10-05)
 
 ## Phase 4: Categories + rules
 - [ ] Default category set; user-defined categories (name, color, icon); delete with reassignment

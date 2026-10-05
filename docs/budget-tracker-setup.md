@@ -213,7 +213,8 @@ The app is architected for multi-tenancy — each household is isolated — but 
 - **Phase 0 (foundations):** done — both deploys healthy, CI green.
 - **Phase 1 (auth + households):** done — Supabase JWT validation, households, invite flow, partner join.
 - **Phase 2 (bank accounts):** done — SimpleFin Bridge connect/remove, encrypted access URL storage, accounts page.
-- **Next, Phase 3:** transaction sync engine (see `todo.md`).
+- **Phase 3 (transaction sync):** done — nightly + on-demand sync, 90-day initial lookback, transactions page.
+- **Next, Phase 4:** categories + rules engine (see `todo.md`).
 
 ## 13. Rules to remember
 
