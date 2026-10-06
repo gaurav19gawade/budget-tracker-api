@@ -111,12 +111,15 @@ public class CategoryService {
         return rules.findByHouseholdId(ctx.householdId());
     }
 
+    @Transactional
     public CategoryRule createRule(HouseholdContext ctx, UUID categoryId, int priority,
                                    CategoryRule.MatchField matchField, String matchValue) {
         requireOwned(ctx, categoryId);
-        return rules.save(new CategoryRule(
+        CategoryRule rule = rules.save(new CategoryRule(
                 UUID.randomUUID(), ctx.householdId(), categoryId,
                 priority, matchField, matchValue, clock.instant()));
+        applyRules(ctx);
+        return rule;
     }
 
     public void deleteRule(HouseholdContext ctx, UUID ruleId) {
@@ -127,14 +130,17 @@ public class CategoryService {
         rules.deleteById(ruleId);
     }
 
+    @Transactional
     public CategoryRule updateRulePriority(HouseholdContext ctx, UUID ruleId, int newPriority) {
         CategoryRule rule = rules.findById(ruleId)
                 .orElseThrow(() -> new NotFoundException("Rule not found."));
         if (!rule.householdId().equals(ctx.householdId()))
             throw new NotFoundException("Rule not found.");
-        return rules.save(new CategoryRule(
+        CategoryRule updated = rules.save(new CategoryRule(
                 rule.id(), rule.householdId(), rule.categoryId(),
                 newPriority, rule.matchField(), rule.matchValue(), rule.createdAt()));
+        applyRules(ctx);
+        return updated;
     }
 
     /**
