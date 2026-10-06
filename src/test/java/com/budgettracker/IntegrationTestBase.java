@@ -49,7 +49,7 @@ abstract class IntegrationTestBase {
     @BeforeEach
     void cleanDatabase() {
         jdbc.execute("TRUNCATE budget.transaction, budget.category_rule, budget.category, "
-                + "budget.bank_account, budget.teller_enrollment, "
+                + "budget.budget, budget.bank_account, budget.teller_enrollment, "
                 + "budget.household_invite, budget.household_member, "
                 + "budget.household, budget.app_user CASCADE");
     }

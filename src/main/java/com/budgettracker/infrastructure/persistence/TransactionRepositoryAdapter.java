@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+// Object[] used for aggregate result rows
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,6 +90,11 @@ class TransactionRepositoryAdapter implements TransactionRepository {
     @Transactional
     public void reassignCategory(UUID fromCategoryId, UUID toCategoryId) {
         jpa.reassignCategory(fromCategoryId, toCategoryId);
+    }
+
+    @Override
+    public List<Object[]> sumByCategoryForPeriod(UUID householdId, LocalDate from, LocalDate to) {
+        return jpa.sumByCategoryForPeriod(householdId, from, to);
     }
 
     private Transaction toDomain(TransactionEntity e) {

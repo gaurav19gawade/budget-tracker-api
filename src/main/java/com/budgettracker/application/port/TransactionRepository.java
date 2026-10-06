@@ -4,6 +4,7 @@ import com.budgettracker.domain.Transaction;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+// Object[] used for aggregate result rows
 
 public interface TransactionRepository {
 
@@ -29,4 +30,11 @@ public interface TransactionRepository {
      * Used when a category is deleted.
      */
     void reassignCategory(UUID fromCategoryId, UUID toCategoryId);
+
+    /**
+     * Returns per-category spend aggregates for the given household and date window.
+     * Each entry is {categoryId (nullable UUID), sumAmount (BigDecimal)}.
+     * Only posted, non-transfer transactions are included.
+     */
+    List<Object[]> sumByCategoryForPeriod(UUID householdId, LocalDate from, LocalDate to);
 }
