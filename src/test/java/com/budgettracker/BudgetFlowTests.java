@@ -132,10 +132,11 @@ class BudgetFlowTests extends IntegrationTestBase {
         mvc.perform(delete("/api/budgets/" + catFood + "?month=" + MONTH_PARAM).with(as(MEMBER)))
                 .andExpect(status().isNoContent());
 
-        // After deleting the budget and with no transactions, the category is absent from the summary
+        // After deleting the budget the category still appears with budgeted = 0
         mvc.perform(get("/api/budgets?month=" + MONTH_PARAM).with(as(MEMBER)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.categoryId=='" + catFood + "')]").isEmpty());
+                .andExpect(jsonPath("$[?(@.categoryId=='" + catFood + "')].budgeted",
+                        hasItem(closeTo(0.0, 0.01))));
     }
 
     @Test

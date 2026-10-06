@@ -87,15 +87,20 @@ public class BudgetService {
         // Aggregate transaction sums by category
         Map<UUID, BigDecimal[]> spendMap = buildSpendMap(ctx.householdId(), from, to);
 
-        // Union of all category IDs that appear in either budgets or transactions
+        // All category IDs: every household category is always shown so users can set budgets
+        // even on months with no transactions yet
         java.util.Set<UUID> catIds = new java.util.HashSet<>();
+        catIds.addAll(categoryMap.keySet());
         catIds.addAll(budgetMap.keySet());
         catIds.addAll(spendMap.keySet().stream().filter(java.util.Objects::nonNull).collect(Collectors.toSet()));
 
+        // Use scale-4 zeros so Jackson always serializes as a decimal (e.g. 0.0000),
+        // ensuring consistent number type in JSON responses.
+        final BigDecimal ZERO4 = BigDecimal.ZERO.setScale(4);
         List<BudgetSummaryEntry> entries = new ArrayList<>();
-        BigDecimal totalBudgeted = BigDecimal.ZERO;
-        BigDecimal totalSpent    = BigDecimal.ZERO;
-        BigDecimal totalIncome   = BigDecimal.ZERO;
+        BigDecimal totalBudgeted = ZERO4;
+        BigDecimal totalSpent    = ZERO4;
+        BigDecimal totalIncome   = ZERO4;
 
         for (UUID catId : catIds) {
             Category cat = categoryMap.get(catId);
@@ -104,8 +109,8 @@ public class BudgetService {
             String icon  = cat != null ? cat.icon()  : null;
 
             BigDecimal budgeted = budgetMap.containsKey(catId)
-                    ? budgetMap.get(catId).amount() : BigDecimal.ZERO;
-            BigDecimal[] sums = spendMap.getOrDefault(catId, new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+                    ? budgetMap.get(catId).amount() : ZERO4;
+            BigDecimal[] sums = spendMap.getOrDefault(catId, new BigDecimal[]{ZERO4, ZERO4});
             BigDecimal spent  = sums[0]; // absolute sum of negative txns
             BigDecimal income = sums[1]; // sum of positive txns
 
@@ -171,7 +176,8 @@ public class BudgetService {
         for (Object[] row : rows) {
             UUID catId = (UUID) row[0];
             BigDecimal sum = (BigDecimal) row[1];
-            BigDecimal[] buckets = map.computeIfAbsent(catId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal zero4 = BigDecimal.ZERO.setScale(4);
+            BigDecimal[] buckets = map.computeIfAbsent(catId, k -> new BigDecimal[]{zero4, zero4});
             if (sum.compareTo(BigDecimal.ZERO) < 0) {
                 buckets[0] = buckets[0].add(sum.negate()); // spent
             } else {
