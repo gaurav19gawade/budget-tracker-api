@@ -38,6 +38,7 @@ public class SyncService {
     private final BankDataProvider bankData;
     private final CategoryRuleRepository categoryRules;
     private final Categorizer categorizer;
+    private final TransferMatcher transferMatcher;
     private final TokenEncryptionService encryption;
     private final Clock clock;
 
@@ -47,6 +48,7 @@ public class SyncService {
                        BankDataProvider bankData,
                        CategoryRuleRepository categoryRules,
                        Categorizer categorizer,
+                       TransferMatcher transferMatcher,
                        TokenEncryptionService encryption,
                        Clock clock) {
         this.enrollments = enrollments;
@@ -55,6 +57,7 @@ public class SyncService {
         this.bankData = bankData;
         this.categoryRules = categoryRules;
         this.categorizer = categorizer;
+        this.transferMatcher = transferMatcher;
         this.encryption = encryption;
         this.clock = clock;
     }
@@ -81,6 +84,8 @@ public class SyncService {
                         enrollment.id(), householdId, e.getMessage(), e);
             }
         }
+
+        transferMatcher.matchTransfers(householdId);
 
         return new SyncStats(totalNew, totalUpdated, clock.instant());
     }

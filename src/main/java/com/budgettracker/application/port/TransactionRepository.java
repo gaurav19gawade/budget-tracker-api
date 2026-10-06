@@ -37,4 +37,10 @@ public interface TransactionRepository {
      * Only posted, non-transfer transactions are included.
      */
     List<Object[]> sumByCategoryForPeriod(UUID householdId, LocalDate from, LocalDate to);
+
+    /** All posted, non-pending, non-transfer transactions — used for transfer pair matching. */
+    List<Transaction> findPostedNonTransferByHouseholdId(UUID householdId);
+
+    /** Marks two transactions as a linked transfer pair (sets isInternalTransfer=true + shared groupId). */
+    void markAsTransferPair(UUID id1, UUID id2, UUID transferGroupId);
 }

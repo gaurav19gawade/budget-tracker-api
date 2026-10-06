@@ -97,6 +97,20 @@ class TransactionRepositoryAdapter implements TransactionRepository {
         return jpa.sumByCategoryForPeriod(householdId, from, to);
     }
 
+    @Override
+    public List<Transaction> findPostedNonTransferByHouseholdId(UUID householdId) {
+        return jpa.findByHouseholdIdAndPendingFalseAndIsInternalTransferFalse(householdId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void markAsTransferPair(UUID id1, UUID id2, UUID transferGroupId) {
+        jpa.markAsTransferPair(id1, id2, transferGroupId);
+    }
+
     private Transaction toDomain(TransactionEntity e) {
         return new Transaction(
                 e.id, e.householdId, e.accountId, e.providerId,

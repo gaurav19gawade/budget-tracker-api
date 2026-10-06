@@ -28,6 +28,13 @@ interface TransactionJpaRepository extends JpaRepository<TransactionEntity, UUID
     @Query("UPDATE TransactionEntity t SET t.categoryId = :toId WHERE t.categoryId = :fromId")
     void reassignCategory(@Param("fromId") UUID fromId, @Param("toId") UUID toId);
 
+    List<TransactionEntity> findByHouseholdIdAndPendingFalseAndIsInternalTransferFalse(UUID householdId);
+
+    @Modifying
+    @Query("UPDATE TransactionEntity t SET t.isInternalTransfer = true, t.transferGroupId = :groupId " +
+           "WHERE t.id = :id1 OR t.id = :id2")
+    void markAsTransferPair(@Param("id1") UUID id1, @Param("id2") UUID id2, @Param("groupId") UUID groupId);
+
     @Query("SELECT t.categoryId, SUM(t.amount) FROM TransactionEntity t " +
            "WHERE t.householdId = :hid " +
            "AND t.postedDate >= :from AND t.postedDate <= :to " +
