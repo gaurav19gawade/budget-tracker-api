@@ -1,17 +1,23 @@
 package com.budgettracker.application;
 
 import com.budgettracker.application.identity.HouseholdContext;
+import com.budgettracker.application.port.AutoCategorizer;
 import com.budgettracker.application.port.CategoryRepository;
 import com.budgettracker.application.port.CategoryRuleRepository;
 import com.budgettracker.application.port.TransactionRepository;
+import com.budgettracker.application.view.RuleSuggestion;
 import com.budgettracker.domain.Category;
 import com.budgettracker.domain.CategoryRule;
 import com.budgettracker.domain.Transaction;
 import com.budgettracker.domain.error.NotFoundException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,17 +49,20 @@ public class CategoryService {
     private final CategoryRuleRepository rules;
     private final TransactionRepository transactions;
     private final Categorizer categorizer;
+    private final AutoCategorizer autoClassifier;
     private final Clock clock;
 
     public CategoryService(CategoryRepository categories,
                            CategoryRuleRepository rules,
                            TransactionRepository transactions,
                            Categorizer categorizer,
+                           AutoCategorizer autoClassifier,
                            Clock clock) {
         this.categories = categories;
         this.rules = rules;
         this.transactions = transactions;
         this.categorizer = categorizer;
+        this.autoClassifier = autoClassifier;
         this.clock = clock;
     }
 
@@ -161,6 +170,57 @@ public class CategoryService {
             count++;
         }
         return count;
+    }
+
+    // ---- AI suggestions ---------------------------------------------------------
+
+    /**
+     * Returns AI-suggested PAYEE_CONTAINS rules for uncategorized transactions.
+     * Only payees not already matched by an existing rule are included.
+     * Returns an empty list when no API key is configured.
+     */
+    public List<RuleSuggestion> suggestRules(HouseholdContext ctx) {
+        List<Transaction> allTxs = transactions.findAllByHouseholdId(ctx.householdId());
+        List<CategoryRule> existingRules = rules.findByHouseholdId(ctx.householdId());
+        List<Category> cats = categories.findByHouseholdId(ctx.householdId());
+
+        // Count uncategorized (non-override) transactions per payee
+        Map<String, Long> payeeCounts = allTxs.stream()
+                .filter(tx -> tx.categoryId() == null
+                        && !tx.categoryOverride()
+                        && tx.payee() != null
+                        && !tx.payee().isBlank())
+                .collect(Collectors.groupingBy(tx -> tx.payee().trim(), Collectors.counting()));
+
+        if (payeeCounts.isEmpty()) return List.of();
+
+        // Only suggest for payees not already matched by an existing rule
+        List<String> uncoveredPayees = payeeCounts.keySet().stream()
+                .filter(payee -> categorizer.categorize(payee, null, null, null, existingRules) == null)
+                .toList();
+
+        if (uncoveredPayees.isEmpty()) return List.of();
+
+        List<String> categoryNames = cats.stream().map(Category::name).toList();
+        Map<String, Category> catByName = cats.stream()
+                .collect(Collectors.toMap(Category::name, c -> c, (a, b) -> a));
+
+        List<AutoCategorizer.Suggestion> suggestions =
+                autoClassifier.suggest(uncoveredPayees, categoryNames);
+
+        return suggestions.stream()
+                .filter(s -> !"Uncategorized".equals(s.categoryName()))
+                .map(s -> {
+                    Category cat = catByName.get(s.categoryName());
+                    if (cat == null) return null;
+                    return new RuleSuggestion(
+                            s.payee(),
+                            payeeCounts.getOrDefault(s.payee(), 0L).intValue(),
+                            cat.id(), cat.name(), cat.color(), cat.icon());
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(RuleSuggestion::matchCount).reversed())
+                .toList();
     }
 
     // ---- helpers ----------------------------------------------------------------

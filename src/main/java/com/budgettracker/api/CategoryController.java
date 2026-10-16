@@ -4,6 +4,7 @@ import com.budgettracker.application.CategoryService;
 import com.budgettracker.application.identity.HouseholdContext;
 import com.budgettracker.application.view.CategoryRuleView;
 import com.budgettracker.application.view.CategoryView;
+import com.budgettracker.application.view.RuleSuggestion;
 import com.budgettracker.domain.Category;
 import com.budgettracker.domain.CategoryRule;
 import jakarta.validation.Valid;
@@ -114,6 +115,12 @@ public class CategoryController {
     @PostMapping("/api/category-rules/apply")
     public ApplyRulesResult applyRules(HouseholdContext ctx) {
         return new ApplyRulesResult(service.applyRules(ctx));
+    }
+
+    /** Returns AI-suggested PAYEE_CONTAINS rules for uncategorized transactions. */
+    @GetMapping("/api/category-rules/suggestions")
+    public List<RuleSuggestion> suggestRules(HouseholdContext ctx) {
+        return service.suggestRules(ctx);
     }
 
     // ---- mappers ----------------------------------------------------------------
